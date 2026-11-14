@@ -4,7 +4,7 @@ from ..items.armor import Armor
 from ..items.item import Item
 from ..items.weapon import Weapon
 from .hero_class import HeroClass
-
+from ..core.events import Event, EventManager
 
 class Hero(Combatant):
     MAX_NAME_LENGTH = 20
@@ -22,6 +22,7 @@ class Hero(Combatant):
         self._weapon = weapon
         self._armor = armor
         self._inventory: list[Item] = []
+        self._events = EventManager()
         self._health = self.max_health
 
     @property
@@ -67,12 +68,27 @@ class Hero(Combatant):
     def gain_experience(self, amount):
         if amount < 0:
             raise ValueError("Опыт не может быть отрицательным")
+
         self._experience += amount
         gained = 0
+
         while self._experience >= self.experience_to_next_level:
             self._experience -= self.experience_to_next_level
             self._level += 1
             gained += 1
+
+        if gained > 0:
+            self._events.notify(
+                Event(
+                    "level_up",
+                    {
+                        "name": self.name,
+                        "level": self.level,
+                        "levels_gained": gained
+                    }
+                )
+            )
+
         return gained
 
     def add_gold(self, amount):
@@ -90,6 +106,16 @@ class Hero(Combatant):
     def add_item(self, item):
         self._inventory.append(item)
 
+        self._events.notify(
+            Event(
+                "item_added",
+                {
+                    "name": self.name,
+                    "item": item.name
+                }
+            )
+        )
+
     def remove_item(self, item):
         if item not in self._inventory:
             raise ValueError(f"В инвентаре нет предмета {item.name}")
@@ -106,3 +132,9 @@ class Hero(Combatant):
             self._armor = item
         else:
             raise ValueError(f"Предмет нельзя экипировать: {item.name}")
+
+    def subscribe(self, observer):
+        self._events.subscribe(observer)
+
+    def unsubscribe(self, observer):
+        self._events.unsubscribe(observer)

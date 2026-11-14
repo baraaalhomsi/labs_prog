@@ -5,6 +5,7 @@ from ..combat.models import Outcome
 from ..core.dice import Dice
 from ..enemies.enemies import Enemy
 from ..items.item import Item
+from .experience_strategy import StandardExperienceStrategy, ExperienceStrategy
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class Location(ABC):
         self._display_name = display_name
         self._recommended_level = recommended_level
         self._catalog = catalog
+        self._experience_strategy = StandardExperienceStrategy()
 
     @abstractmethod
     def _create_enemy(self) -> Enemy: ...
@@ -47,6 +49,9 @@ class Location(ABC):
     @property
     def recommended_level(self): return self._recommended_level
 
+    def set_experience_strategy(self, strategy: ExperienceStrategy):
+        self._experience_strategy = strategy
+
     def explore(self, hero, seed=None):
         dice = Dice()
         actual_seed = dice.next_seed() if seed is None else seed
@@ -61,13 +66,17 @@ class Location(ABC):
         return ExpeditionReport(actual_seed, self._code, battle_report, rewards)
 
     def _reward(self, hero, enemy, dice):
-        experience = enemy.experience_reward
+        experience = self._experience_strategy.calculate(
+            enemy.experience_reward
+        )
         gold = enemy.roll_gold_reward()
         loot = self._roll_loot(dice)
         levels_gained = hero.gain_experience(experience)
         hero.add_gold(gold)
+
         if loot is not None:
             hero.add_item(loot)
+
         return Rewards(experience, gold, loot, levels_gained)
 
     def _roll_loot(self, dice):
